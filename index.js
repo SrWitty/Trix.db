@@ -51,15 +51,20 @@ class Database {
 
     loadData() {
         try {
+            if (!fs.existsSync(this.filename)) {
+               
+                fs.writeFileSync(this.filename, '{}', 'utf-8');
+            }
             let rawData = fs.readFileSync(this.filename, 'utf-8');
-            if (this.encrypt) {
+            if (this.encrypt && rawData) { 
                 rawData = this.decryptData(rawData);
             }
-            this.data = JSON.parse(rawData);
+            this.data = JSON.parse(rawData || '{}'); 
         } catch (err) {
             console.error('Error loading data:', err);
         }
     }
+    
 
     encryptData(data) {
         const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(this.key), this.iv);
