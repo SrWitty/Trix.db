@@ -1,0 +1,27 @@
+{
+  "name": "trix.db",
+  "version": "1.0.0",
+  "description": "Trix Database is a powerful Node.js package for managing data with built-in support for encryption, MongoDB integration, and caching. It provides an intuitive interface for storing, retrieving, and manipulating data efficiently.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iim7md11/Trix.db.git"
+  },
+  "keywords": [
+    "db",
+    "database",
+    "discord",
+    "discordbots",
+    "discorddatabase",
+    "db",
+    "pro.db"
+  ],
+  "author": "iim7md11",
+  "license": "ISC",
+  "dependencies": {
+    "crypto": "^1.0.1"
+  }
+}
