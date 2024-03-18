@@ -107,6 +107,7 @@ const Database = require('trix.db');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] });
 const db = new Database();
+db.disableEncryption();
 const leaderboard = new Map();
 
 client.once('ready', () => {
@@ -123,23 +124,32 @@ client.on('messageCreate', message => {
             const args = message.content.split(' ');
             const amount = parseInt(args[1]);
             if (!isNaN(amount)) {
-                db.add(`balance_${message.author.id}`, amount);
+                db.set(`balance_${message.author.id}`, amount);
                 message.channel.send(`Added ${amount} to your balance.`);
             } else {
                 message.channel.send('Invalid amount. Usage: !addmoney [amount]');
             }
         }
         else if (message.content.toLowerCase() === '!leaderboard') {
-            const sortedLeaderboard = [...leaderboard.entries()]
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10);
-
-            let leaderboardMessage = '**Leaderboard:**\n';
-            sortedLeaderboard.forEach(([userId, balance], position) => {
-                leaderboardMessage += `${position + 1}. <@${userId}>: ${balance}\n`;
-            });
-
-            message.channel.send(leaderboardMessage);
+            const leaderboardData = db.all(); 
+            const sortedLeaderboard = Object.entries(leaderboardData)
+                .filter(([key]) => key.startsWith('balance_'))
+                .sort(([, balanceA], [, balanceB]) => balanceB - balanceA) 
+                .slice(0, 5); 
+        
+            const leaderboardEmbed = new MessageEmbed()
+                .setTitle('Leaderboard')
+                .setColor('#0099ff')
+                .setDescription('Here are the top 5 users on the leaderboard:')
+                .addFields(
+                    sortedLeaderboard.map(([key, balance], position) => ({
+                        name: `#${position + 1}`,
+                        value: `<@${key.split('_')[1]}>: ${balance}`,
+                        inline: true
+                    }))
+                );
+        
+            message.channel.send({ embeds: [leaderboardEmbed] });
         }
     }
 });
