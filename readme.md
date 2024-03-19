@@ -3,6 +3,10 @@
 ### Overview
 Trix Database is a powerful Node.js package for managing data with built-in support for encryption, MongoDB integration, and caching. It provides an intuitive interface for storing, retrieving, and manipulating data efficiently.
 
+### **Version**:
+
+TrixDB Version Is: **1.0.3**
+
 ### Installation
 You can install the Trix Database package via npm:
 
@@ -158,17 +162,61 @@ client.on('messageCreate', message => {
 client.login('YOUR_BOT_TOKEN');
 ```
 
-### The Small Update
+## 🎉 🥳 **Updates**
 
-1. Fix Don't Make Database Json File
+### 1. **Data Encryption and Decryption**
 
-2. Add Discord Bot Example For Package 
+#### **Encryption**
+Added functions for encrypting data using AES-256-CBC encryption. Encryption is enabled by default.
 
+To enable encryption:
+```javascript
+const database = new Database({
+    encrypt: true, // Enable encryption
+});
+```
 
-### Conclusion
-The Trix Database package offers a robust solution for data management in Node.js applications. With its encryption, MongoDB integration, and caching capabilities, it provides flexibility, security, and performance for handling various data storage requirements.
+#### **Decryption**
+Added functions to decrypt encrypted data.
 
-### Programmer Information
+To disable encryption:
+```javascript
+const database = new Database({
+    encrypt: false, // Disable encryption
+});
+```
+
+### 2. **Logs System**
+
+#### **Commands**
+
+1. `initLogs()`: Initializes the logs system.
+2. `createLogStream(filename)`: Creates a new log file with the specified filename.
+3. `log(message, filename)`: Logs a message to the specified log file. Default filename is 'default'.
+4. `enableLogs()`: Enables logging.
+5. `disableLogs()`: Disables logging.
+
+#### **Usage**
+
+To **enable logging**:
+```javascript
+database.enableLogs(); // Enable logging
+```
+
+To **disable logging**:
+```javascript
+database.disableLogs(); // Disable logging
+```
+
+**To log a message**:
+```javascript
+database.log('Message to log', 'customLog.log'); // Logs message to customLog.log
+```
+
+### **Conclusion**
+These updates enhance the functionality of the Trix Database package by introducing data encryption and decryption capabilities using AES-256-CBC encryption. Additionally, a flexible logging system has been implemented to facilitate better management of logs.
+
+### **Programmer Information**
 - Programmer: [iim7md11]
-- GitHub: [[GitHub Profile](https://github.com/iim7md11)]
-- Discord: [[Discord Profile ](https://discord.com/users/1091118468155314306)]
+- GitHub: [GitHub Profile](https://github.com/iim7md11)
+- Discord: [Discord Profile](https://discord.com/users/1091118468155314306)
