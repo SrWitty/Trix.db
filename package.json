@@ -1,6 +1,6 @@
 {
   "name": "trix.db",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Trix Database is a powerful Node.js package for managing data with built-in support for encryption, MongoDB integration, and caching. It provides an intuitive interface for storing, retrieving, and manipulating data efficiently.",
   "main": "index.js",
   "scripts": {
@@ -23,6 +23,8 @@
   "license": "ISC",
   "dependencies": {
     "crypto": "^1.0.1",
-    "mongodb": "^6.5.0"
+    "mongodb": "^6.5.0",
+    "pg": "^8.12.0",
+    "sqlite3": "^5.1.7"
   }
 }

@@ -1,4 +1,6 @@
 const { MongoClient } = require('mongodb');
+const { Client } = require('pg');
+const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
@@ -8,46 +10,44 @@ class Database {
         const {
             filename = 'Trix.json',
             encrypt = true,
+            algorithm = 'aes-256-cbc',
             key = crypto.randomBytes(32),
             iv = crypto.randomBytes(16),
             logsEnabled = true,
             logFilename = 'Trix.log'
         } = options;
-    
+
         this.filename = filename;
         this.encrypt = encrypt;
+        this.algorithm = algorithm;
         this.key = key;
-        this.iv = iv; // Ensure that IV is initialized
+        this.iv = iv;
         this.logsEnabled = logsEnabled;
         this.logFilename = logFilename;
-        this.logStreams = {}; 
-    
+        this.logStreams = {};
+
         this.data = {};
         this.cache = {};
         this.cacheTTL = 60;
-    
+
         this.initLogs();
         this.loadData();
-    
+
         setInterval(() => {
             this.checkCacheExpiration();
         }, 1000);
-    
-        this.sqlData = {}; 
+
+        this.sqlData = {};
     }
-    
 
     initLogs() {
         if (this.logsEnabled) {
-            
             this.logStreams.default = fs.createWriteStream(this.logFilename, { flags: 'a' });
         }
     }
 
     createLogStream(filename) {
-       
         if (!this.logStreams[filename]) {
-           
             this.logStreams[filename] = fs.createWriteStream(filename, { flags: 'a' });
         }
     }
@@ -95,9 +95,6 @@ class Database {
             }
             let rawData = fs.readFileSync(this.filename, 'utf-8');
             if (this.encrypt && rawData) {
-                if (!this.iv) {
-                    throw new Error('Initialization vector (IV) is missing. Ensure that IV is properly initialized.');
-                }
                 rawData = this.decryptData(rawData);
             }
             this.data = JSON.parse(rawData || '{}');
@@ -106,22 +103,28 @@ class Database {
             this.log(`Error loading data: ${err.message}`);
         }
     }
-    
 
     encryptData(data) {
-        const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(this.key), this.iv);
+        const cipher = crypto.createCipheriv(this.algorithm, Buffer.from(this.key), this.iv);
         let encryptedData = cipher.update(data, 'utf-8', 'hex');
         encryptedData += cipher.final('hex');
         return { iv: this.iv.toString('hex'), encryptedData };
     }
 
     decryptData(data) {
-        const iv = Buffer.from(this.iv, 'hex');
+        const iv = Buffer.from(data.iv, 'hex');
         const encryptedData = Buffer.from(data.encryptedData, 'hex');
-        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(this.key), iv);
+        const decipher = crypto.createDecipheriv(this.algorithm, Buffer.from(this.key), iv);
         let decryptedData = decipher.update(encryptedData);
-        decryptedData = Buffer.concat([decipher.final()]);
+        decryptedData = Buffer.concat([decryptedData, decipher.final()]);
         return decryptedData.toString();
+    }
+
+    changeEncryptionKey(newKey, newIV) {
+        this.key = newKey;
+        this.iv = newIV;
+        this.loadData();
+        this.log('Encryption key and IV changed.');
     }
 
     set(key, value) {
@@ -162,6 +165,23 @@ class Database {
         }
         this.data[key].push(item);
         this.saveData();
+    }
+
+    pushArray(key, items) {
+        if (!Array.isArray(this.data[key])) {
+            this.data[key] = [];
+        }
+        this.data[key].push(...items);
+        this.saveData();
+        this.log(`Items added to array ${key}: ${items}`);
+    }
+
+    removeFromArray(key, items) {
+        if (Array.isArray(this.data[key])) {
+            this.data[key] = this.data[key].filter(item => !items.includes(item));
+            this.saveData();
+            this.log(`Items removed from array ${key}: ${items}`);
+        }
     }
 
     math(key, operator, num) {
@@ -216,7 +236,7 @@ class Database {
     async findOne(collectionName, query) {
         try {
             const document = await this.db.collection(collectionName).findOne(query);
-            this.log('Document found:', document);
+            this.log(`Document found: ${JSON.stringify(document)}`);
             return document;
         } catch (err) {
             console.error('Error finding document:', err);
@@ -224,7 +244,6 @@ class Database {
         }
     }
 
-   
     async updateOne(collectionName, filter, update) {
         try {
             const result = await this.db.collection(collectionName).updateOne(filter, { $set: update });
@@ -234,6 +253,7 @@ class Database {
             this.log(`Error updating document: ${err.message}`);
         }
     }
+
     async deleteOne(collectionName, filter) {
         try {
             const result = await this.db.collection(collectionName).deleteOne(filter);
@@ -279,7 +299,7 @@ class Database {
 
     disableCache() {
         this.cacheEnabled = false;
-        this.cache = {}; 
+        this.cache = {};
         this.log('CacheDriver disabled.');
     }
 
@@ -291,107 +311,106 @@ class Database {
         }
     }
 
-    fetchAll() {
-        if (this.cacheEnabled) {
-            return Object.assign({}, this.cache);
-        } else {
-            return Object.assign({}, this.data);
+    notify(message) {
+        // Implement notification mechanism (e.g., email, push notification, etc.)
+        this.log(`Notification: ${message}`);
+    }
+
+    saveCache(filename) {
+        fs.writeFileSync(filename, JSON.stringify(this.cache), 'utf-8');
+        this.log(`Cache saved to ${filename}`);
+    }
+
+    loadCache(filename) {
+        const cacheData = fs.readFileSync(filename, 'utf-8');
+        this.cache = JSON.parse(cacheData);
+        this.log(`Cache loaded from ${filename}`);
+    }
+
+    async startTransaction() {
+        this.currentSession = this.client.startSession();
+        this.currentSession.startTransaction();
+    }
+
+    async commitTransaction() {
+        await this.currentSession.commitTransaction();
+        this.log('Transaction committed.');
+    }
+
+    async rollbackTransaction() {
+        await this.currentSession.abortTransaction();
+        this.log('Transaction rolled back.');
+    }
+
+    initMultipleLogs(logTypes) {
+        if (this.logsEnabled) {
+            logTypes.forEach(type => {
+                this.logStreams[type] = fs.createWriteStream(`${type}_${this.logFilename}`, { flags: 'a' });
+            });
         }
     }
 
-    all() {
-        if (this.cacheEnabled) {
-            return this.cache;
-        } else {
-            return this.data;
+    disableLogs() {
+        this.logsEnabled = false;
+        for (const stream in this.logStreams) {
+            this.logStreams[stream].end();
+        }
+        this.logStreams = {};
+        this.log('Logging disabled.');
+    }
+
+    async insertPostgreSQL(connectionOptions, table, document) {
+        const client = new Client(connectionOptions);
+        try {
+            await client.connect();
+            
+            const keys = Object.keys(document).join(', ');
+            const values = Object.values(document);
+            const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
+    
+            const query = `INSERT INTO ${table} (${keys}) VALUES (${placeholders}) RETURNING *`;
+            const res = await client.query(query, values);
+            
+            this.log(`Document inserted into PostgreSQL table ${table}: ${JSON.stringify(res.rows[0])}`);
+            
+            return res.rows[0];
+        } catch (err) {
+            console.error('Error inserting into PostgreSQL:', err);
+            this.log(`Error inserting into PostgreSQL: ${err.message}`);
+            throw err;
+        } finally {
+            await client.end();
         }
     }
-
-    backup(filename) {
-        const backupData = JSON.stringify(this.data, null, 2);
-        fs.writeFileSync(filename, backupData, 'utf-8');
-        this.log(`Backup created as ${filename}`);
-    }
-
-    reset() {
-        this.data = {};
-        this.saveData();
-    }
-
-    async init(table) {
-        if (this.db) return true;
-        await this.client.connect();
-        this.db = this.client.db(table);
-        return true;
-    }
-
-    async setRowByKey(table, key, value) {
-        if (!this.db) throw new Error('Database not initialized');
-        await this.db.collection(table).updateOne({ key }, { $set: { value: JSON.stringify(value) } }, { upsert: true });
-        return true;
-    }
-
-    async getAllRows(table) {
-        if (!this.db) throw new Error('Database not initialized');
-        const cursor = await this.db.collection(table).find();
-        const data = {};
-        await cursor.forEach((doc) => {
-            data[doc.key] = JSON.parse(doc.value);
-        });
-        return data;
-    }
-
-    async getRowByKey(table, key) {
-        if (!this.db) throw new Error('Database not initialized');
-        const doc = await this.db.collection(table).findOne({ key });
-        
-        if (!doc) return doc;
-        return JSON.parse(doc.value);
-    }
-
-    async deleteRowByKey(table, key) {
-        if (!this.db) throw new Error('Database not initialized');
-        const result = await this.db.collection(table).deleteOne({ key });
-        return result.deletedCount || 0;
-    }
-
-    async deleteAllRows(table) {
-        if (!this.db) throw new Error('Database not initialized');
-        await this.db.collection(table).deleteMany({});
-        return true;
-    }
-
-    async close() {
-        if (!this.db) throw new Error('Database not initialized');
-        await this.client.close();
-        this.db = undefined;
-        return true;
-    }
+    
 
     
 
-    setValue(key, value) {
-        this.sqlData[key] = { value, time: Date.now() };
-    }
+async findOneSQLite(databaseFile, table, query) {
+    const db = new sqlite3.Database(databaseFile);
+    
+    const keys = Object.keys(query);
+    const values = Object.values(query);
+    const placeholders = keys.map(key => `${key} = ?`).join(' AND ');
 
-    getData() {
-        return this.sqlData;
-    }
+    const sql = `SELECT * FROM ${table} WHERE ${placeholders} LIMIT 1`;
 
-    async getSortedData(key) {
-        const sortedKeys = Object.keys(this.sqlData).sort((a, b) => {
-            return this.sqlData[a].time - this.sqlData[b].time;
+    return new Promise((resolve, reject) => {
+        db.get(sql, values, (err, row) => {
+            if (err) {
+                console.error('Error finding document in SQLite:', err);
+                this.log(`Error finding document in SQLite: ${err.message}`);
+                reject(err);
+            } else {
+                this.log(`Document found in SQLite table ${table}: ${JSON.stringify(row)}`);
+                resolve(row);
+            }
+            db.close();
         });
-
-        if (sortedKeys.length === 0) return null;
-
-        if (key && key in this.sqlData) {
-            return this.sqlData[key];
-        } else {
-            return this.sqlData[sortedKeys[0]];
-        }
-    }
+    });
 }
 
+
+}
 
 module.exports = Database;
